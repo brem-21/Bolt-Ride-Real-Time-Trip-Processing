@@ -4,3 +4,7 @@ numpy
 matplotlib
 seaborn
 python-dotenv
+pytest
+pytest-cov
+pytest-mock
+black

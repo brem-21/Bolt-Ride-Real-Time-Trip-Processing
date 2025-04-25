@@ -3,10 +3,10 @@ install:
 	pip install -r requirements.txt
 
 format:
-	black scripts/*.py tests/*.py glue_script/*.py
+	black scripts/*.py 
 
 test:
-	python -m pytest -vv --cov=tests tests/test_*.py
+	python -m pytest -vv --cov=scripts scripts/test_*.py
 
 refactor: format lint
 
