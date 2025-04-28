@@ -4,20 +4,22 @@ import base64
 from decimal import Decimal
 from datetime import datetime
 import logging
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 dynamodb = boto3.client('dynamodb')  # Use client for batch_write_item
-table_name = 'TaxiData'
+table_name = os.environ['TABLE_NAME']
 
 def lambda_handler(event, context):
     processed_records = 0
     batch_size = 25  # DynamoDB batch_write_item limit
     valid_fields = {
         'trip_id', 'pickup_location_id', 'dropoff_location_id', 'vendor_id',
-        'pickup_datetime', 'estimated_dropoff_datetime', 'estimated_fare_amount', 'pickup_time'
+        'pickup_datetime', 'estimated_dropoff_datetime', 'estimated_fare_amount', 
+        'pickup_time', 'estimated_dropoff_time'
     }
     items_to_write = []
 
@@ -130,10 +132,17 @@ def process_trip_start(payload):
         if payload.get('estimated_fare_amount') is not None:
             payload['estimated_fare_amount'] = round(float(payload['estimated_fare_amount']), 2)
 
-        # Ensure estimated_dropoff_datetime is a timestamp
+        # Process estimated_dropoff_datetime and extract estimated_dropoff_time
         if payload.get('estimated_dropoff_datetime'):
-            dropoff_dt = datetime.strptime(payload['estimated_dropoff_datetime'], '%Y-%m-%d %H:%M:%S')
-            payload['estimated_dropoff_datetime'] = dropoff_dt.strftime('%Y-%m-%d %H:%M:%S')
+            try:
+                dropoff_dt = datetime.strptime(payload['estimated_dropoff_datetime'], '%Y-%m-%d %H:%M:%S')
+                payload['estimated_dropoff_time'] = dropoff_dt.strftime('%H:%M:%S')
+                payload['estimated_dropoff_datetime'] = dropoff_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                logger.error(f"Invalid estimated_dropoff_datetime format: {payload['estimated_dropoff_datetime']}")
+                payload['estimated_dropoff_time'] = None
+        else:
+            payload['estimated_dropoff_time'] = None
 
     except (ValueError, KeyError) as e:
         logger.error(f"Error processing trip start: {e}, payload: {payload}")
