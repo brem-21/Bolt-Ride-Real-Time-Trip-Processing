@@ -1,0 +1,155 @@
+{
+    "Comment": "Optimized Step Function for trip processing with Kinesis and Glue",
+    "StartAt": "StreamTripStart",
+    "States": {
+      "StreamTripStart": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Parameters": {
+          "FunctionName": "arn:aws:lambda:us-east-1:316790247319:function:trip-start",
+          "Payload": {}
+        },
+        "ResultSelector": {
+          "Payload.$": "$.Payload"
+        },
+        "ResultPath": "$.lambda1Output",
+        "Next": "NotifyFirstLambda",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "NotifyFirstLambda": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:316790247319:Success",
+          "Message": {
+            "Status": "StreamTripStart Completed (wrote to trip-start stream)",
+            "LambdaOutput.$": "$.lambda1Output"
+          }
+        },
+        "Next": "StreamTripEnd",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "StreamTripEnd": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Parameters": {
+          "FunctionName": "arn:aws:lambda:us-east-1:316790247319:function:trip_end",
+          "Payload": {}
+        },
+        "ResultSelector": {
+          "Payload.$": "$.Payload"
+        },
+        "ResultPath": "$.lambda2Output",
+        "Next": "NotifySecondLambda",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "NotifySecondLambda": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:316790247319:Success",
+          "Message": {
+            "Status": "StreamTripEnd Completed (wrote to trip_end stream)",
+            "LambdaOutput.$": "$.lambda2Output"
+          }
+        },
+        "Next": "StartGlueJob",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "StartGlueJob": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::glue:startJobRun",
+        "Parameters": {
+          "JobName": "test"
+        },
+        "ResultPath": "$.glueOutput",
+        "Next": "NotifyGlueJob",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "NotifyGlueJob": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:316790247319:Success",
+          "Message": {
+            "Status": "Glue Job Completed",
+            "GlueOutput.$": "$.glueOutput"
+          }
+        },
+        "Next": "NotifySuccess",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "ResultPath": "$.ErrorInfo",
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "NotifySuccess": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:316790247319:Success",
+          "Message": {
+            "Status": "Workflow Success"
+          }
+        },
+        "End": true
+      },
+      "NotifyFailure": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:316790247319:failure",
+          "Message": {
+            "Status": "Workflow Failure",
+            "Error.$": "$.ErrorInfo.Error",
+            "Cause.$": "$.ErrorInfo.Cause"
+          }
+        },
+        "End": true
+      }
+    }
+  }
